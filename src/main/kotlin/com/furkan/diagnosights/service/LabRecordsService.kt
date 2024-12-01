@@ -14,10 +14,13 @@ import me.xdrop.fuzzywuzzy.FuzzySearch
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.apache.poi.ss.usermodel.Sheet
 import org.apache.poi.ss.usermodel.Workbook
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.io.buffer.DataBufferUtils
+import org.springframework.http.HttpStatus
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
+import org.springframework.web.server.ResponseStatusException
 import reactor.core.publisher.Flux
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -59,7 +62,7 @@ class LabRecordsService {
 
             val fileStream: InputStream = ByteArrayInputStream(content.toByteArray())
 
-            val workbook: Workbook = HSSFWorkbook(fileStream)
+            val workbook: Workbook = try{HSSFWorkbook(fileStream)} catch (e: Exception) { XSSFWorkbook(fileStream) }
 
             for (sheet in workbook) {
 
@@ -71,14 +74,20 @@ class LabRecordsService {
     private suspend fun processSheet(sheet: Sheet) {
 
         val indexToColName = mutableMapOf<Int, RecordColumn>()
+        val headers = mutableListOf<RecordColumn>()
         val rowsIterator = sheet.rowIterator()
         val headerRow = rowsIterator.next()
 
         for (i in 0 until headerRow.lastCellNum) {
             val headerValue = headerRow.getCell(i).toString().lowercase()
             val column = getColumnByHeaderValue(headerValue)
-            column?.let { indexToColName[i] = it }
+            column?.let {
+                indexToColName[i] = it
+                headers.add(it)
+            }
         }
+
+        if (headers.isEmpty() || !headers.containsAll(listOf(RecordColumn.BARCODE_ID, RecordColumn.ANTIBIOTIC_NAME, RecordColumn.RESULT))) throw ResponseStatusException(HttpStatus.BAD_REQUEST, "File has missing columns")
 
         val listOfRows: MutableList<Map<RecordColumn, String>> = ArrayList()
 
@@ -89,6 +98,8 @@ class LabRecordsService {
             for (i in 0 until row.lastCellNum) {
                 indexToColName[i]?.let { rowMap[it] = row.getCell(i).toString() }
             }
+
+            if (!rowMap.containsKey(RecordColumn.BARCODE_ID) || !rowMap.containsKey(RecordColumn.ANTIBIOTIC_NAME) ) continue
 
             listOfRows.add(rowMap)
         }
