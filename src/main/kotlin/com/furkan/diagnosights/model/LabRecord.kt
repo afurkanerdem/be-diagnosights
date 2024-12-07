@@ -11,6 +11,7 @@ import java.util.*
 data class LabRecord(
     @Id
     val barcodeId: String,
+    @Indexed
     val patientNameSurname: String,
     val department: String,
     @Indexed

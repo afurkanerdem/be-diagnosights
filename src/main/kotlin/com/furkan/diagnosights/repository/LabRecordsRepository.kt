@@ -14,7 +14,9 @@ import org.springframework.data.mongodb.core.query.Criteria.where
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.query.Update
 import org.springframework.stereotype.Repository
-import java.time.OffsetDateTime
+import org.springframework.util.StringUtils
+import java.time.LocalDate
+import java.util.regex.Pattern
 
 @Log4j2
 @Repository
@@ -54,22 +56,43 @@ class LabRecordsRepository @Autowired constructor(val template: ReactiveMongoTem
 
     }
 
-    suspend fun getRecords(limit: Int?, offset: Long?, timeIntervalStart: OffsetDateTime?, timeIntervalEnd: OffsetDateTime?): List<LabRecord> {
+    suspend fun getRecords(
+        limit: Int?,
+        offset: Long?,
+        timeIntervalStart: LocalDate?,
+        timeIntervalEnd: LocalDate?,
+        patientNameSurname: String?
+    ): Pair<List<LabRecord>, Long>? {
 
         val query = Query()
 
-        if (timeIntervalStart != null) {
+        if (timeIntervalStart != null && timeIntervalEnd != null) {
+            query.addCriteria(where("barcodeDate").gte(timeIntervalStart).lte(timeIntervalEnd.plusDays(1)))
+        } else if (timeIntervalStart != null) {
             query.addCriteria(where("barcodeDate").gte(timeIntervalStart))
+        } else if (timeIntervalEnd != null) {
+            query.addCriteria(where("barcodeDate").lte(timeIntervalEnd.plusDays(1)))
         }
-        if (timeIntervalEnd != null) {
-            query.addCriteria(where("barcodeDate").lte(timeIntervalEnd))
+
+        patientNameSurname?.let {
+            if (StringUtils.hasText(patientNameSurname)) {
+                query.addCriteria(where("patientNameSurname").regex(".*$patientNameSurname.*", "i"))
+            }
         }
+
+        val totalCount = template.count(query, LabRecord::class.java).awaitSingleOrNull() ?: 0
+
 
         query.with(Sort.by(Sort.Direction.DESC, "barcodeDate"))
-        query.limit(limit?:20)
-        query.skip(offset?:0)
 
-        return template.find(query, LabRecord::class.java).collectList().awaitSingleOrNull() ?: emptyList()
+        query.limit(limit ?: 20)
+        query.skip(offset ?: 0)
+
+        template.useEstimatedCount(true)
+
+
+        return (template.find(query, LabRecord::class.java).collectList().awaitSingleOrNull() ?: emptyList()) to totalCount
+
 
     }
 
@@ -86,6 +109,11 @@ class LabRecordsRepository @Autowired constructor(val template: ReactiveMongoTem
     suspend fun deleteRecords(barcodeIds: List<String>) {
 
         template.remove(Query.query(where("_id").`in`(barcodeIds)), LabRecord::class.java).awaitSingleOrNull()
+    }
+
+    suspend fun getRecordsByBarcodeIds(barcodeIds: List<String>): List<LabRecord>? {
+        return template.find(Query.query(where("_id").`in`(barcodeIds)), LabRecord::class.java).collectList()
+            .awaitSingleOrNull()
     }
 
 

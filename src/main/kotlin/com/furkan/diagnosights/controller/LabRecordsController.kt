@@ -3,24 +3,12 @@ package com.furkan.diagnosights.controller
 import com.furkan.diagnosights.model.LabRecord
 import com.furkan.diagnosights.model.MatchInfo
 import com.furkan.diagnosights.service.LabRecordsService
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.reactive.asFlow
-import org.apache.poi.hssf.usermodel.HSSFWorkbook
-import org.apache.poi.ss.usermodel.Workbook
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.MediaType
-import org.springframework.http.client.MultipartBodyBuilder
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Flux
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.InputStream
-import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
+import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
@@ -45,15 +33,25 @@ class LabRecordsController {
         @RequestParam(required = false) limit: Int?,
         @RequestParam(required = false) offset: Long?,
         @RequestParam(required = false) timeIntervalStart: String?,
-        @RequestParam(required = false) timeIntervalEnd: String?
-    ): List<Pair<LabRecord, MatchInfo?>> {
+        @RequestParam(required = false) timeIntervalEnd: String?,
+        @RequestParam(required = false) patientNameSurname: String?
+    ): ApiResponse {
 
         val timeIntervalStartTime =
-            timeIntervalStart?.let { OffsetDateTime.parse(timeIntervalStart, DateTimeFormatter.ISO_OFFSET_DATE_TIME) }
+            timeIntervalStart?.let { LocalDate.parse(timeIntervalStart) }
         val timeIntervalEndTime =
-            timeIntervalEnd?.let { OffsetDateTime.parse(timeIntervalEnd, DateTimeFormatter.ISO_OFFSET_DATE_TIME) }
+            timeIntervalEnd?.let { LocalDate.parse(timeIntervalEnd) }
 
-        return labRecordsService.getRecords(limit, offset, timeIntervalStartTime, timeIntervalEndTime)
+        return labRecordsService.getRecords(limit, offset, timeIntervalStartTime, timeIntervalEndTime, patientNameSurname)?.let {
+            ApiResponse(it.second, it.first)
+        } ?: ApiResponse(0, emptyList())
+    }
+
+    @PostMapping("/batchRecords", produces = [MediaType.APPLICATION_JSON_VALUE])
+    suspend fun getBatchRecords(
+        @RequestBody barcodeIds: List<String>
+    ): List<LabRecord>?{
+       return labRecordsService.getBatchRecords(barcodeIds) ?: emptyList()
     }
 
     //delete
@@ -68,5 +66,5 @@ class LabRecordsController {
         return labRecordsService.deleteRecords(barcodeIds)
     }
 
-
+    class ApiResponse(val totalCount: Long, val records: List<LabRecordsService.LabRecordWithMatchInfo>)
 }

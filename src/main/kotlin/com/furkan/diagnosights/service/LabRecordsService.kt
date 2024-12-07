@@ -27,6 +27,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
 
 
@@ -186,10 +187,13 @@ class LabRecordsService {
             .filter { it.second > 80 }.maxByOrNull { it.second }?.first
     }
 
-    suspend fun getRecords(limit: Int?, offset: Long?, timeIntervalStart: OffsetDateTime?, timeIntervalEnd: OffsetDateTime?): List<Pair<LabRecord, MatchInfo?>> {
+    suspend fun getRecords(limit: Int?, offset: Long?, timeIntervalStart: LocalDate?, timeIntervalEnd: LocalDate?, patientNameSurname: String?): Pair<List<LabRecordWithMatchInfo>, Long>? {
 
-        return labRecordsRepository.getRecords(limit, offset, timeIntervalStart, timeIntervalEnd)
-            .map { rec -> rec to matchInfoService.getMatchInfo(rec) }
+        return labRecordsRepository.getRecords(limit, offset, timeIntervalStart, timeIntervalEnd, patientNameSurname)?.let {
+            val records = it.first
+            val totalCount  = it.second
+            return (records.map { rec -> LabRecordWithMatchInfo(rec, matchInfoService.getMatchInfo(rec)) }) to totalCount
+        }
     }
 
     suspend fun deleteRecord(barcodeId: String) {
@@ -200,6 +204,12 @@ class LabRecordsService {
    suspend fun deleteRecords(barcodeIds: List<String>) {
         labRecordsRepository.deleteRecords(barcodeIds)
     }
+
+    suspend fun getBatchRecords(barcodeIds: List<String>): List<LabRecord>? {
+       return labRecordsRepository.getRecordsByBarcodeIds(barcodeIds)
+    }
+
+    data class LabRecordWithMatchInfo(val record: LabRecord, val matchInfo: MatchInfo?)
 
 
 }

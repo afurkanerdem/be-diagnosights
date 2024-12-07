@@ -74,6 +74,7 @@ class MatchInfoRepository @Autowired constructor(val template: ReactiveMongoTemp
                 where("resistantAntibioticsHashValue").`is`(matchInfo.resistantAntibioticsHashValue)
                     .and("susceptibleAntibioticsHashValue").`is`(matchInfo.susceptibleAntibioticsHashValue)
                     .and("susceptibleAtHighDoseAntibioticsHashValue").`is`(matchInfo.susceptibleAtHighDoseAntibioticsHashValue)
+                    .and("matchRecords.1").exists(true)
             ), MatchInfo::class.java
         ).awaitSingleOrNull()
     }

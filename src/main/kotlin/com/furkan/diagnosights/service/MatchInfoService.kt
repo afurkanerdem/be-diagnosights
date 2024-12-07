@@ -14,7 +14,7 @@ class MatchInfoService {
 
     suspend fun updateMatchInfo(labRecords: List<LabRecord>) {
         val derivedMatches = labRecords.map {  deriveMatchInfo(it) }
-        matchInfoRepository.upsertMatchInfo(derivedMatches)
+        matchInfoRepository.upsertMatchInfo(derivedMatches.filterNotNull())
     }
 
     suspend fun deleteRecord(barcodeId: String) {
@@ -22,11 +22,14 @@ class MatchInfoService {
     }
 
     suspend fun getMatchInfo(labRecord: LabRecord) : MatchInfo? {
+
         val matchInfo = deriveMatchInfo(labRecord)
-        return matchInfoRepository.getMatchInfo(matchInfo)
+        return matchInfo?.let {  matchInfoRepository.getMatchInfo(matchInfo)}
     }
 
-    private fun deriveMatchInfo(labRecord: LabRecord): MatchInfo {
+    private fun deriveMatchInfo(labRecord: LabRecord): MatchInfo? {
+
+        if (labRecord.resistantAntibiotics.isEmpty() || labRecord.susceptibleAntibiotics.isEmpty() || labRecord.susceptibleAtHighDoseAntibiotics.isEmpty()) return null
 
         val resistantAntibioticsHash = hashArrayIrrespectiveOrder(labRecord.resistantAntibiotics)
         val susceptibleAntibioticsHash = hashArrayIrrespectiveOrder(labRecord.susceptibleAntibiotics)
